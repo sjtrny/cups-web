@@ -1,0 +1,21 @@
+# Credentials and local configuration
+*-access.txt
+.env
+.env.*
+!.env.example
+compose.override.yaml
+compose.override.yml
+
+# Local deployment history, uploads and archived frontend
+/artifacts/
+/web/
+/compose.cups-web.yaml
+/data/
+/uploads/
+
+# Generated files
+__pycache__/
+*.py[cod]
+*.log
+*.zip
+.DS_Store

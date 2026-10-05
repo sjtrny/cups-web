@@ -1,0 +1,6 @@
+# Apply alongside compose.yaml to use private images published by GitHub Actions.
+services:
+  cups:
+    image: ghcr.io/sjtrny/label-printer-cups:${IMAGE_TAG:-latest}
+  web:
+    image: ghcr.io/sjtrny/label-printer-web:${IMAGE_TAG:-latest}

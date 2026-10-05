@@ -1,0 +1,53 @@
+services:
+  cups:
+    build: .
+    image: local/brother-label-print-server:bookworm
+    restart: unless-stopped
+    environment:
+      PRINT_HOST: ${PRINT_HOST:-192.168.20.10}
+      PRINTER_URI: ${PRINTER_URI:-socket://192.168.20.214:9100}
+      QUEUE_NAME: Brother_QL1110NWB
+      # Example 4 x 6 inch preset for the detected 102 mm continuous roll.
+      LABEL_MEDIA: ${LABEL_MEDIA:-4x6}
+    ports:
+      - "${PRINT_HOST:-192.168.20.10}:18631:18631"
+    volumes:
+      - cups-config:/etc/cups
+      - cups-spool:/var/spool/cups
+      - cups-runtime:/run/cups
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /run/cups/label-printer-ready && lpstat -h /run/cups/cups.sock -p Brother_QL1110NWB"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  web:
+    build: ./minimal-web
+    image: local/minimal-print-web:bookworm
+    restart: unless-stopped
+    environment:
+      CUPS_SERVER: /run/cups/cups.sock
+      STATE_DIR: /data
+      RETENTION_DAYS: "7"
+      TZ: Australia/Sydney
+    ports:
+      - "${PRINT_HOST:-192.168.20.10}:${WEB_PORT:-18680}:8080"
+    volumes:
+      - print-ui-data:/data
+      - cups-runtime:/run/cups:ro
+    depends_on:
+      cups:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  cups-config:
+  cups-spool:
+  cups-runtime:
+  print-ui-data:

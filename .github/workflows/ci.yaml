@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check ${{ matrix.image }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: cups
+            context: .
+          - image: web
+            context: ./minimal-web
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check script syntax and Compose configuration
+        run: |
+          sh -n entrypoint.sh install-driver.sh
+          node --check minimal-web/static/app.js
+          docker compose config --quiet
+          docker compose -f compose.yaml -f compose.ghcr.yaml -f compose.rootful.yaml config --quiet
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64
+          load: true
+          tags: local/label-printer-${{ matrix.image }}:ci
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+      - name: Check document conversion and previews
+        if: matrix.image == 'web'
+        run: |
+          docker run --rm --network none \
+            -e STATE_DIR=/tmp/print-preview-state -e PYTHONDONTWRITEBYTECODE=1 \
+            --mount "type=bind,source=$PWD/minimal-web/test_documents.py,target=/app/test_documents.py,readonly" \
+            --mount "type=bind,source=$PWD/minimal-web/test_preview.py,target=/app/test_preview.py,readonly" \
+            local/label-printer-web:ci python3 -m unittest -v test_documents test_preview
+      - name: Check CUPS startup and driver
+        if: matrix.image == 'cups'
+        run: |
+          docker run --detach --network none --name cups-ci \
+            -e PRINT_HOST=127.0.0.1 -e PRINTER_URI=socket://127.0.0.1:9100 \
+            -e LABEL_MEDIA=4x6 local/label-printer-cups:ci
+          ready=false
+          for _ in $(seq 1 40); do
+            if docker exec cups-ci test -f /run/cups/label-printer-ready; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            docker logs cups-ci
+            exit 1
+          fi
+          docker exec cups-ci cupstestppd -q /etc/cups/ppd/Brother_QL1110NWB.ppd
+          docker exec cups-ci lpstat -h /run/cups/cups.sock -p Brother_QL1110NWB
+          docker exec cups-ci lpoptions -h /run/cups/cups.sock -p Brother_QL1110NWB -l
+      - name: Remove isolated CUPS container
+        if: always() && matrix.image == 'cups'
+        run: docker rm --force cups-ci || true

@@ -1,0 +1,14 @@
+# Apply alongside compose.yaml on the host's rootful (default) Docker context.
+services:
+  web:
+    networks:
+      - caddy_proxy
+    labels:
+      caddy: printer.local
+      caddy.reverse_proxy: "{{upstreams 8080}}"
+      caddy.tls: internal
+      caddy_ingress_network: caddy_proxy
+
+networks:
+  caddy_proxy:
+    external: true

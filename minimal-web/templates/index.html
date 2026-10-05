@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Print</title>
+  <link rel="stylesheet" href="/static/bootstrap.min.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+<main class="container py-3">
+  <h1 class="h4">Print</h1>
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <label for="printer" class="form-label">Printer</label>
+      <select id="printer" class="form-select"></select>
+    </div>
+    <div class="col-md-6 align-self-end">
+      <button id="refresh" type="button" class="btn btn-outline-secondary">Refresh printers</button>
+      <span id="printer-state"></span>
+    </div>
+  </div>
+  <div class="mb-3" role="status" aria-live="polite">
+    <span id="loading-indicator" hidden><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span></span>
+    <span id="status">Loading printers…</span>
+  </div>
+  <div class="row g-4">
+    <div class="col-md-6">
+      <form id="print-form">
+        <label for="file" class="form-label">Document</label>
+        <input id="file" type="file" class="form-control mb-2" accept=".pdf,.txt,image/*,.heic,.heif,.avif">
+        <p id="file-info" class="small">PDF, raster image including HEIC/AVIF, or UTF-8 text. Up to 50 MB.</p>
+        <div id="main-controls" class="row g-2 mb-2"></div>
+        <div id="custom-paper" class="row g-2 mb-2" hidden>
+          <div class="col-6"><label for="paper-width" class="form-label">Paper width (mm)</label><input id="paper-width" type="number" step="any" class="form-control" required disabled></div>
+          <div class="col-6"><label for="paper-height" class="form-label">Paper length (mm)</label><input id="paper-height" type="number" step="any" class="form-control" required disabled></div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label for="scale" class="form-label">Scaling</label>
+            <select id="scale" class="form-select">
+              <option value="none">Actual size (100%)</option>
+              <option value="fit">Fit to paper</option>
+              <option value="fill">Fill paper (crop edges)</option>
+              <option value="custom">Custom percentage</option>
+            </select>
+          </div>
+          <div id="percent-field" class="col-6" hidden>
+            <label for="percent" class="form-label">Scale (%)</label>
+            <input id="percent" type="number" class="form-control" min="1" max="1000" step="any" value="100">
+          </div>
+          <div class="col-6">
+            <label for="rotation" class="form-label">Rotate content</label>
+            <select id="rotation" class="form-select">
+              <option value="0">0°</option><option value="90">90°</option>
+              <option value="180">180°</option><option value="270">270°</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label for="pages" class="form-label">Pages</label>
+            <input id="pages" class="form-control" placeholder="All, or 1-3,5">
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label for="offset-x" class="form-label">Horizontal offset (mm)</label>
+            <input id="offset-x" type="number" class="form-control" min="-1000" max="1000" step="any" value="0" aria-describedby="offset-help" required>
+          </div>
+          <div class="col-6">
+            <label for="offset-y" class="form-label">Vertical offset (mm)</label>
+            <input id="offset-y" type="number" class="form-control" min="-1000" max="1000" step="any" value="0" aria-describedby="offset-help" required>
+          </div>
+          <div id="offset-help" class="col-12 form-text">Positive moves right/down; negative moves left/up. Content outside the print region is clipped.</div>
+        </div>
+        <div class="form-check mb-3">
+          <input id="crop" type="checkbox" class="form-check-input">
+          <label for="crop" class="form-check-label">Crop white margins before scaling</label>
+        </div>
+        <details open class="mb-3">
+          <summary>Printer controls</summary>
+          <div id="driver-controls" class="row g-2 mt-1"></div>
+        </details>
+        <details class="mb-3">
+          <summary>Other print settings</summary>
+          <div id="other-controls" class="row g-2 mt-1"></div>
+          <label for="extra" class="form-label mt-2">Additional advertised options (one per line)</label>
+          <textarea id="extra" class="form-control" rows="2" placeholder="option=value"></textarea>
+        </details>
+        <button id="print" type="submit" class="btn btn-primary" disabled>Print</button>
+        <button id="reset" type="button" class="btn btn-outline-secondary">Load printer defaults</button>
+      </form>
+    </div>
+    <div id="preview-area" class="col-md-6" aria-busy="false">
+      <h2 class="h6">Print preview</h2>
+      <p class="small">Preview shows layout and colour mode. Other printer controls are applied when printing.</p>
+      <p id="preview-loading" class="small" hidden><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span><span id="preview-loading-text">Updating preview…</span></p>
+      <img id="preview" class="img-fluid border" width="432" alt="Preview of the page that will be printed" hidden>
+      <div id="preview-controls" class="mt-2" hidden>
+        <button id="previous" type="button" class="btn btn-sm btn-outline-secondary">Previous</button>
+        <span id="preview-page"></span>
+        <button id="next" type="button" class="btn btn-sm btn-outline-secondary">Next</button>
+        <a id="download" class="ms-2" href="#">Download print PDF</a>
+      </div>
+    </div>
+  </div>
+  <details id="admin-controls" class="mt-4">
+    <summary>Printer defaults and queue controls</summary>
+    <label for="admin-password" class="form-label mt-2">Administrator password</label>
+    <input id="admin-password" type="password" class="form-control mb-2" autocomplete="current-password">
+    <div class="d-flex gap-2 flex-wrap">
+      <button id="save-defaults" type="button" class="btn btn-sm btn-outline-secondary">Save current settings as defaults</button>
+      <button id="pause" type="button" class="btn btn-sm btn-outline-secondary">Pause printing</button>
+      <button id="resume" type="button" class="btn btn-sm btn-outline-secondary">Resume printing</button>
+      <button id="reject" type="button" class="btn btn-sm btn-outline-secondary">Stop accepting jobs</button>
+      <button id="accept" type="button" class="btn btn-sm btn-outline-secondary">Accept jobs</button>
+      <button id="make-default" type="button" class="btn btn-sm btn-outline-secondary">Set default printer</button>
+    </div>
+  </details>
+  <div class="d-flex gap-2 align-items-center mt-4 mb-2">
+    <h2 class="h6 mb-0">Jobs</h2>
+    <button id="refresh-jobs" type="button" class="btn btn-sm btn-outline-secondary">Refresh</button>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm">
+      <thead><tr><th>Job</th><th>Document</th><th>Printer</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="jobs"></tbody>
+    </table>
+  </div>
+  <details><summary>Printer capabilities</summary><pre id="capabilities" class="small mt-2"></pre></details>
+</main>
+</body>
+</html>

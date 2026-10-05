@@ -1,0 +1,97 @@
+name: Publish images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialize publications so an older run cannot overwrite a newer latest tag.
+concurrency:
+  group: publish-main
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yaml
+    permissions:
+      contents: read
+
+  publish:
+    name: Publish ${{ matrix.image }}
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: cups
+            context: .
+          - image: web
+            context: ./minimal-web
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set image name
+        id: image
+        env:
+          REPOSITORY: ${{ github.repository }}
+          COMPONENT: ${{ matrix.image }}
+        run: |
+          package="${REPOSITORY##*/}-$COMPONENT"
+          echo "package=${package,,}" >> "$GITHUB_OUTPUT"
+          echo "name=ghcr.io/${REPOSITORY,,}-$COMPONENT" >> "$GITHUB_OUTPUT"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish image
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.description=Ethernet Brother label print server (${{ matrix.image }})
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+      - name: Verify private package and repository link
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE: ${{ steps.image.outputs.package }}
+        run: |
+          gh api "users/$GITHUB_REPOSITORY_OWNER/packages/container/$PACKAGE" > "$RUNNER_TEMP/package.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          package = json.loads((Path(os.environ["RUNNER_TEMP"]) / "package.json").read_text())
+          assert package["visibility"] == "private", "The image package must remain private"
+          assert package["repository"]["full_name"] == os.environ["GITHUB_REPOSITORY"], "The package must be linked to this repository"
+          print(f'{package["name"]}: private, linked to {package["repository"]["full_name"]}')
+          PY
+      - name: Check published image and record digest
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker buildx imagetools inspect "$IMAGE:sha-$GITHUB_SHA"
+          printf 'Published private image: %s@%s\n' "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"

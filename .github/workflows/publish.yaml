@@ -74,7 +74,7 @@ jobs:
             org.opencontainers.image.description=Ethernet Brother label print server (${{ matrix.image }})
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
-      - name: Verify private package and repository link
+      - name: Verify private package
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PACKAGE: ${{ steps.image.outputs.package }}
@@ -85,13 +85,25 @@ jobs:
           from pathlib import Path
           package = json.loads((Path(os.environ["RUNNER_TEMP"]) / "package.json").read_text())
           assert package["visibility"] == "private", "The image package must remain private"
-          assert package["repository"]["full_name"] == os.environ["GITHUB_REPOSITORY"], "The package must be linked to this repository"
-          print(f'{package["name"]}: private, linked to {package["repository"]["full_name"]}')
+          print(f'{package["name"]}: private')
           PY
-      - name: Check published image and record digest
+      - name: Pull published image and check source metadata
         env:
           IMAGE: ${{ steps.image.outputs.name }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           docker buildx imagetools inspect "$IMAGE:sha-$GITHUB_SHA"
+          docker pull "$IMAGE@$DIGEST"
+          docker image inspect "$IMAGE@$DIGEST" > "$RUNNER_TEMP/image.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          image = json.loads((Path(os.environ["RUNNER_TEMP"]) / "image.json").read_text())[0]
+          labels = image["Config"]["Labels"]
+          source = f'{os.environ["GITHUB_SERVER_URL"]}/{os.environ["GITHUB_REPOSITORY"]}'
+          assert labels["org.opencontainers.image.source"] == source, "Image source must identify this repository"
+          assert labels["org.opencontainers.image.revision"] == os.environ["GITHUB_SHA"], "Image revision must match the published commit"
+          assert (image["Os"], image["Architecture"]) == ("linux", "amd64"), "The stack requires linux/amd64"
+          print(f'Published linux/amd64 image matches {source} at {os.environ["GITHUB_SHA"]}')
+          PY
           printf 'Published private image: %s@%s\n' "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"

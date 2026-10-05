@@ -7,6 +7,13 @@ framework, JavaScript build, external fonts, CDN requests or custom stylesheet.
 CUPS remains the driver and queue backend. The application uses Flask, pycups,
 PyMuPDF, Pillow and libheif from Debian packages and runs under Gunicorn.
 
+The **Print** tab contains the controls and preview, separated by a vertical
+line on desktop. They stack on smaller screens. The **Print queue** tab shows
+jobs and their actions; switching tabs keeps the document and settings.
+The **Info** button directly below the printer select opens its capabilities
+in a modal. Close it with the close button, Escape or a click outside it.
+Tabs support arrow keys, Home and End. No additional JavaScript library is used.
+
 ## Printing
 
 1. Select a configured CUPS printer and upload a PDF, image or UTF-8 text file.

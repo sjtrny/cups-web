@@ -14,6 +14,7 @@
     <div class="col-md-6">
       <label for="printer" class="form-label">Printer</label>
       <select id="printer" class="form-select"></select>
+      <button id="printer-info" type="button" class="btn btn-sm btn-outline-secondary mt-2" aria-haspopup="dialog" aria-controls="capabilities-modal" disabled>Info</button>
     </div>
     <div class="col-md-6 align-self-end">
       <button id="refresh" type="button" class="btn btn-outline-secondary">Refresh printers</button>
@@ -24,8 +25,13 @@
     <span id="loading-indicator" hidden><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span></span>
     <span id="status">Loading printers…</span>
   </div>
+  <div class="nav nav-tabs mb-3" role="tablist" aria-label="Print views">
+    <button id="print-tab" type="button" class="nav-link active" role="tab" aria-controls="print-panel" aria-selected="true">Print</button>
+    <button id="queue-tab" type="button" class="nav-link" role="tab" aria-controls="queue-panel" aria-selected="false" tabindex="-1">Print queue</button>
+  </div>
+  <section id="print-panel" role="tabpanel" aria-labelledby="print-tab">
   <div class="row g-4">
-    <div class="col-md-6">
+    <div class="col-12 col-md">
       <form id="print-form">
         <label for="file" class="form-label">Document</label>
         <input id="file" type="file" class="form-control mb-2" accept=".pdf,.txt,image/*,.heic,.heif,.avif">
@@ -90,7 +96,8 @@
         <button id="reset" type="button" class="btn btn-outline-secondary">Load printer defaults</button>
       </form>
     </div>
-    <div id="preview-area" class="col-md-6" aria-busy="false">
+    <div class="col-auto d-none d-md-flex px-0" aria-hidden="true"><div class="vr"></div></div>
+    <div id="preview-area" class="col-12 col-md" aria-busy="false">
       <h2 class="h6">Print preview</h2>
       <p class="small">Preview shows layout and colour mode. Other printer controls are applied when printing.</p>
       <p id="preview-loading" class="small" hidden><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span><span id="preview-loading-text">Updating preview…</span></p>
@@ -116,8 +123,10 @@
       <button id="make-default" type="button" class="btn btn-sm btn-outline-secondary">Set default printer</button>
     </div>
   </details>
+  </section>
+  <section id="queue-panel" role="tabpanel" aria-labelledby="queue-tab" hidden>
   <div class="d-flex gap-2 align-items-center mt-4 mb-2">
-    <h2 class="h6 mb-0">Jobs</h2>
+    <h2 class="h6 mb-0">Print queue</h2>
     <button id="refresh-jobs" type="button" class="btn btn-sm btn-outline-secondary">Refresh</button>
   </div>
   <div class="table-responsive">
@@ -126,7 +135,14 @@
       <tbody id="jobs"></tbody>
     </table>
   </div>
-  <details><summary>Printer capabilities</summary><pre id="capabilities" class="small mt-2"></pre></details>
+  </section>
+  <dialog id="capabilities-modal" class="border rounded p-0" aria-labelledby="capabilities-title">
+    <div class="d-flex align-items-center justify-content-between gap-3 p-3 border-bottom sticky-top bg-body">
+      <h2 id="capabilities-title" class="h6 mb-0">Printer capabilities</h2>
+      <button id="close-capabilities" type="button" class="btn-close" aria-label="Close printer capabilities"></button>
+    </div>
+    <pre id="capabilities" class="small p-3 mb-0"></pre>
+  </dialog>
 </main>
 </body>
 </html>

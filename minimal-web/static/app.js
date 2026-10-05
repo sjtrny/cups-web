@@ -29,8 +29,22 @@ function previewBusy(active, label = 'Updating preview…') {
   activity();
 }
 
+function selectTab(name, focus = false) {
+  for (const id of ['print', 'queue']) {
+    const selected = id === name;
+    const tab = $(id + '-tab');
+    tab.classList.toggle('active', selected);
+    tab.setAttribute('aria-selected', String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    $(id + '-panel').hidden = !selected;
+  }
+  if (focus) $(name + '-tab').focus();
+  if (name === 'queue') loadJobs().catch(showError);
+}
+
 function adminHeader() {
   if (!$('admin-password').value) {
+    selectTab('print');
     $('admin-controls').open = true;
     $('admin-password').focus();
     throw new Error('Enter the administrator password first.');
@@ -109,8 +123,11 @@ async function loadPrinter() {
   previewRequest?.abort();
   previewBusy(Boolean(upload), 'Loading printer settings…');
   $('print').disabled = true;
+  $('printer-info').disabled = true;
+  $('capabilities').textContent = 'Loading printer capabilities…';
   if (!$('printer').value) {
     printer = null;
+    $('capabilities').textContent = 'No printer selected.';
     previewBusy(false);
     message('No printers configured in CUPS.', true);
     return;
@@ -142,6 +159,7 @@ async function loadPrinter() {
   $('pages').value = '';
   $('extra').value = '';
   $('capabilities').textContent = JSON.stringify(printer.attributes, null, 2);
+  $('printer-info').disabled = false;
   if (printer.custom) {
     for (const axis of ['width', 'height']) {
       const field = $('paper-' + axis), limits = printer.custom[axis];
@@ -295,6 +313,26 @@ function showError(error) {
 function handle(id, operation) {
   $(id).addEventListener('click', () => operation().catch(showError));
 }
+
+for (const name of ['print', 'queue']) {
+  const tab = $(name + '-tab');
+  tab.addEventListener('click', () => selectTab(name));
+  tab.addEventListener('keydown', event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 'print' : event.key === 'End' ? 'queue' : name === 'print' ? 'queue' : 'print';
+    selectTab(next, true);
+  });
+}
+$('printer-info').addEventListener('click', () => $('capabilities-modal').showModal());
+$('close-capabilities').addEventListener('click', () => $('capabilities-modal').close());
+$('capabilities-modal').addEventListener('click', event => {
+  if (event.target !== $('capabilities-modal')) return;
+  const box = event.target.getBoundingClientRect();
+  if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) {
+    event.target.close();
+  }
+});
 
 $('printer').addEventListener('change', () => loadPrinter().catch(showError));
 $('file').addEventListener('change', async () => {

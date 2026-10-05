@@ -10,14 +10,16 @@
 <body>
 <main class="container py-3">
   <h1 class="h4">Print</h1>
-  <div class="row g-3 mb-3">
-    <div class="col-md-6">
-      <label for="printer" class="form-label">Printer</label>
+  <label for="printer" class="form-label">Printer</label>
+  <div class="row gx-2 mb-3">
+    <div class="col col-md-6">
       <select id="printer" class="form-select"></select>
-      <button id="printer-info" type="button" class="btn btn-sm btn-outline-secondary mt-2" aria-haspopup="dialog" aria-controls="capabilities-modal" disabled>Info</button>
+      <div class="d-flex justify-content-between align-items-center mt-2">
+        <button id="printer-info" type="button" class="btn btn-sm btn-outline-secondary" aria-haspopup="dialog" aria-controls="capabilities-modal" disabled>Info</button>
+        <button id="refresh" type="button" class="btn btn-sm btn-outline-secondary">Refresh printers</button>
+      </div>
     </div>
-    <div class="col-md-6 align-self-end">
-      <button id="refresh" type="button" class="btn btn-outline-secondary">Refresh printers</button>
+    <div class="col-auto py-2">
       <span id="printer-state"></span>
     </div>
   </div>

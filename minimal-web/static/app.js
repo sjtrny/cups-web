@@ -278,9 +278,11 @@ async function loadJobs(background = false) {
   $('jobs').replaceChildren();
   for (const job of result.jobs) {
     const row = document.createElement('tr');
-    for (const value of [job.id, job.title, job.printer, jobStates[job.state] || job.state]) {
+    for (const key of ['id', 'title', 'printer', 'state']) {
       const cell = document.createElement('td');
-      cell.textContent = value;
+      if (key === 'title') cell.className = 'text-break';
+      if (key === 'printer') cell.className = 'text-break w-25';
+      cell.textContent = key === 'state' ? jobStates[job.state] || job.state : job[key];
       row.append(cell);
     }
     const actions = document.createElement('td');

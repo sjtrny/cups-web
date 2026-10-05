@@ -10,8 +10,12 @@ PyMuPDF, Pillow and libheif from Debian packages and runs under Gunicorn.
 The **Print** tab contains the controls and preview, separated by a vertical
 line on desktop. They stack on smaller screens. The **Print queue** tab shows
 jobs and their actions; switching tabs keeps the document and settings.
+Long document and printer names wrap within the queue table without stretching
+the other columns. Full filenames remain readable.
 The **Info** button directly below the printer select opens its capabilities
-in a modal. Close it with the close button, Escape or a click outside it.
+in a modal. **Refresh printers** shares that row and aligns with the dropdown's
+right edge; the printer state appears beside the dropdown.
+Close the modal with the close button, Escape or a click outside it.
 Tabs support arrow keys, Home and End. No additional JavaScript library is used.
 
 ## Printing

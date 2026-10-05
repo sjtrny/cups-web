@@ -8,7 +8,9 @@ CUPS remains the driver and queue backend. The application uses Flask, pycups,
 PyMuPDF, Pillow and libheif from Debian packages and runs under Gunicorn.
 
 The **Print** tab contains the controls and preview, separated by a vertical
-line on desktop. They stack on smaller screens. The **Print queue** tab shows
+line on desktop. Printer selection, Info, Refresh printers and state appear
+at the top of the left column, above the document and print options. The
+columns stack on smaller screens. The **Print queue** tab shows
 jobs and their actions; switching tabs keeps the document and settings.
 Long document and printer names wrap within the queue table without stretching
 the other columns. Full filenames remain readable.

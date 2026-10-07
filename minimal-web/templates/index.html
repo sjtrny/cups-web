@@ -106,6 +106,11 @@
         <div class="d-grid">
           <button id="print" type="submit" form="print-form" class="btn btn-primary" disabled><span id="print-spinner" class="spinner-border spinner-border-sm me-2" aria-hidden="true" hidden></span><span id="print-label">Print document</span></button>
         </div>
+        <div id="print-feedback" class="alert mt-3 mb-0" role="status" aria-live="polite" tabindex="-1" hidden>
+          <div id="print-feedback-title" class="fw-semibold"></div>
+          <div id="print-feedback-text" class="text-break"></div>
+          <button id="view-print-queue" type="button" class="btn btn-sm btn-link p-0 mt-2">View print queue</button>
+        </div>
       </div>
       <div class="d-flex align-items-center gap-2 mb-2">
         <h2 class="h6 mb-0">Print preview</h2>
@@ -118,11 +123,6 @@
         <span id="preview-page"></span>
         <button id="next" type="button" class="btn btn-sm btn-outline-secondary">Next</button>
         <a id="download" class="ms-2" href="#">Download print PDF</a>
-      </div>
-      <div id="print-feedback" class="alert mt-3 mb-0" role="status" aria-live="polite" tabindex="-1" hidden>
-        <div id="print-feedback-title" class="fw-semibold"></div>
-        <div id="print-feedback-text" class="text-break"></div>
-        <button id="view-print-queue" type="button" class="btn btn-sm btn-link p-0 mt-2">View print queue</button>
       </div>
     </div>
   </div>

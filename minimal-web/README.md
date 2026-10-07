@@ -43,11 +43,11 @@ Tabs support arrow keys, Home and End. No additional JavaScript library is used.
 
 Print shows **Sending…** and a spinner while the request is pending, and prevents
 another submission until it finishes. A persistent green **Print job sent**
-message confirms acceptance with the document, printer and job number. Use
-**View print queue** to see its status. Errors appear in the same place and
-allow retry; a queue-refresh or browser-history error does not turn an accepted
-job into a failed print message. The confirmation reports job submission;
-physical output still depends on the printer.
+message directly below the button confirms acceptance with the document,
+printer and job number. Use **View print queue** to see its status. Errors appear
+in the same place and allow retry; a queue-refresh or browser-history error does
+not turn an accepted job into a failed print message. The confirmation reports
+job submission; physical output still depends on the printer.
 
 Uploads, preview updates and print submission show a Bootstrap loading spinner.
 The preview spinner and **updating** label sit beside **Print preview**.

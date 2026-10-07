@@ -37,8 +37,8 @@ Tabs support arrow keys, Home and End. No additional JavaScript library is used.
    each page moves within its own cell. Rotation and page ranges are also
    supported.
 5. Check the layout preview, then press **Print document** in its separate row
-   below the preview. The download link returns the same prepared PDF submitted
-   to CUPS. **Reset to defaults** sits beside the Print options heading and
+   above the preview image. The download link returns the same prepared PDF
+   submitted to CUPS. **Reset to defaults** sits beside the Print options heading and
    reloads the selected printer's saved settings.
 
 Print shows **Sending…** and a spinner while the request is pending, and prevents

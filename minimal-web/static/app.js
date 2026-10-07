@@ -13,19 +13,17 @@ function message(text, error = false) {
 
 function activity() {
   $('loading-indicator').hidden = activeRequests === 0 && !previewPending;
-  $('preview-loading').hidden = !previewPending;
+  $('preview-loading').classList.toggle('invisible', !previewPending);
+  $('preview-loading').setAttribute('aria-hidden', String(!previewPending));
   $('preview-area').setAttribute('aria-busy', String(previewPending));
   $('preview').classList.toggle('opacity-50', previewPending);
   $('previous').disabled = previewPending || previewPage <= 1;
   $('next').disabled = previewPending || previewPage >= previewPages;
 }
 
-function previewBusy(active, label = 'Updating preview…') {
+function previewBusy(active) {
   previewPending = active;
-  if (active) {
-    $('preview-loading-text').textContent = label;
-    $('print').disabled = true;
-  }
+  if (active) $('print').disabled = true;
   activity();
 }
 
@@ -121,7 +119,7 @@ async function loadPrinter() {
   revision++;
   clearTimeout(timer);
   previewRequest?.abort();
-  previewBusy(Boolean(upload), 'Loading printer settings…');
+  previewBusy(Boolean(upload));
   $('print').disabled = true;
   $('printer-info').disabled = true;
   $('capabilities').textContent = 'Loading printer capabilities…';
@@ -352,7 +350,7 @@ $('file').addEventListener('change', async () => {
   if (file.size > 50 * 1024 * 1024) return message('File exceeds 50 MB.', true);
   const controller = new AbortController();
   uploadRequest = controller;
-  previewBusy(true, 'Uploading document…');
+  previewBusy(true);
   try {
     message('Uploading…');
     const body = new FormData();

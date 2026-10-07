@@ -40,6 +40,9 @@ Tabs support arrow keys, Home and End. No additional JavaScript library is used.
    the same prepared PDF submitted to CUPS.
 
 Uploads, preview updates and print submission show a Bootstrap loading spinner.
+The preview spinner and **updating** label sit beside **Print preview**.
+Their space stays reserved while hidden, so the preview image does not move
+when loading starts or finishes.
 The previous preview is dimmed during an update; Print and page navigation stay
 disabled until the new preview image is decoded. Rapid changes discard stale
 responses, errors clear the loading state, and background job polling is quiet.

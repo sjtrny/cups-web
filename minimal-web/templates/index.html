@@ -100,9 +100,11 @@
     </div>
     <div class="col-auto d-none d-md-flex px-0" aria-hidden="true"><div class="vr"></div></div>
     <div id="preview-area" class="col-12 col-md" aria-busy="false">
-      <h2 class="h6">Print preview</h2>
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <h2 class="h6 mb-0">Print preview</h2>
+        <span id="preview-loading" class="d-inline-flex align-items-center gap-1 small text-nowrap invisible" aria-hidden="true"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>updating</span>
+      </div>
       <p class="small">Preview shows layout and colour mode. Other printer controls are applied when printing.</p>
-      <p id="preview-loading" class="small" hidden><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span><span id="preview-loading-text">Updating preview…</span></p>
       <img id="preview" class="img-fluid border" width="432" alt="Preview of the page that will be printed" hidden>
       <div id="preview-controls" class="mt-2" hidden>
         <button id="previous" type="button" class="btn btn-sm btn-outline-secondary">Previous</button>

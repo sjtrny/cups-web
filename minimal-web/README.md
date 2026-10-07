@@ -36,8 +36,18 @@ Tabs support arrow keys, Home and End. No additional JavaScript library is used.
    Paper size stays fixed; content outside the region is clipped. For N-up,
    each page moves within its own cell. Rotation and page ranges are also
    supported.
-5. Check the layout preview, then press **Print**. The download link returns
-   the same prepared PDF submitted to CUPS.
+5. Check the layout preview, then press **Print document** in its separate row
+   below the preview. The download link returns the same prepared PDF submitted
+   to CUPS. **Reset to defaults** sits beside the Print options heading and
+   reloads the selected printer's saved settings.
+
+Print shows **Sending…** and a spinner while the request is pending, and prevents
+another submission until it finishes. A persistent green **Print job sent**
+message confirms acceptance with the document, printer and job number. Use
+**View print queue** to see its status. Errors appear in the same place and
+allow retry; a queue-refresh or browser-history error does not turn an accepted
+job into a failed print message. The confirmation reports job submission;
+physical output still depends on the printer.
 
 Uploads, preview updates and print submission show a Bootstrap loading spinner.
 The preview spinner and **updating** label sit beside **Print preview**.

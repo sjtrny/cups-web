@@ -2,6 +2,7 @@
 const $ = id => document.getElementById(id);
 let printer = null, upload = null, previewPage = 1, previewPages = 1, timer, previewRequest, revision = 0, uploadRevision = 0;
 let uploadRequest, printerRevision = 0, activeRequests = 0, previewPending = false;
+let previewReady = false, submitting = false;
 const primary = new Set(['PageSize', 'media', 'copies', 'BrPriority', 'print-quality']);
 const jobStates = {3: 'Queued', 4: 'Held', 5: 'Printing', 6: 'Stopped', 7: 'Cancelled', 8: 'Aborted', 9: 'Completed'};
 
@@ -10,8 +11,25 @@ function message(text, error = false) {
   $('status').className = error ? 'text-danger' : '';
 }
 
+function printFeedback(title, text, success) {
+  const feedback = $('print-feedback');
+  feedback.className = `alert alert-${success ? 'success' : 'danger'} mt-3 mb-0`;
+  feedback.setAttribute('role', success ? 'status' : 'alert');
+  feedback.setAttribute('aria-live', success ? 'polite' : 'assertive');
+  $('print-feedback-title').textContent = title;
+  $('print-feedback-text').textContent = text;
+  feedback.hidden = false;
+  if (!$('print-panel').hidden) {
+    feedback.focus({preventScroll: true});
+    feedback.scrollIntoView({block: 'nearest'});
+  }
+}
 
 function activity() {
+  $('print').disabled = submitting || !previewReady || previewPending;
+  $('print-spinner').hidden = !submitting;
+  $('print-label').textContent = submitting ? 'Sending…' : 'Print document';
+  $('print-actions').setAttribute('aria-busy', String(submitting));
   $('loading-indicator').hidden = activeRequests === 0 && !previewPending;
   $('preview-loading').classList.toggle('invisible', !previewPending);
   $('preview-loading').setAttribute('aria-hidden', String(!previewPending));
@@ -23,7 +41,7 @@ function activity() {
 
 function previewBusy(active) {
   previewPending = active;
-  if (active) $('print').disabled = true;
+  if (active) previewReady = false;
   activity();
 }
 
@@ -119,8 +137,9 @@ async function loadPrinter() {
   revision++;
   clearTimeout(timer);
   previewRequest?.abort();
+  previewReady = false;
   previewBusy(Boolean(upload));
-  $('print').disabled = true;
+  $('print-feedback').hidden = true;
   $('printer-info').disabled = true;
   $('capabilities').textContent = 'Loading printer capabilities…';
   if (!$('printer').value) {
@@ -213,7 +232,7 @@ function schedulePreview() {
   const custom = Boolean(printer?.custom && $('option-PageSize')?.value === 'Custom');
   $('custom-paper').hidden = !custom;
   $('paper-width').disabled = $('paper-height').disabled = !custom;
-  $('print').disabled = true;
+  previewReady = false;
   clearTimeout(timer);
   revision++;
   previewRequest?.abort();
@@ -249,7 +268,7 @@ async function refreshPreview() {
     $('preview-controls').hidden = false;
     $('preview-page').textContent = `${previewPage} / ${previewPages}`;
     $('download').href = result.document;
-    $('print').disabled = false;
+    previewReady = true;
     message('Ready to print.');
   } catch (error) {
     if (version !== revision || controller.signal.aborted) return;
@@ -337,7 +356,8 @@ $('capabilities-modal').addEventListener('click', event => {
 $('printer').addEventListener('change', () => loadPrinter().catch(showError));
 $('file').addEventListener('change', async () => {
   const version = ++uploadRevision;
-  $('print').disabled = true;
+  previewReady = false;
+  $('print-feedback').hidden = true;
   upload = null;
   revision++;
   clearTimeout(timer);
@@ -373,21 +393,36 @@ $('print-form').addEventListener('input', event => {
 });
 $('print-form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (!upload) return message('Upload a document first.', true);
-  $('print').disabled = true;
+  if (submitting) return;
+  $('print-feedback').hidden = true;
   try {
+    if (!upload || !previewReady || previewPending) throw new Error('Wait for the document preview before printing.');
     const payload = requestDocument();
+    const submittedUpload = upload.id, submittedDocument = upload.name;
+    const submittedPrinter = $('printer').selectedOptions[0]?.label || payload.printer;
     payload.submission = [...crypto.getRandomValues(new Uint8Array(16))].map(v => v.toString(16).padStart(2, '0')).join('');
-    message('Submitting print job…');
+    submitting = true;
+    activity();
+    message('Sending print job…');
     const result = await api('/api/print', payload);
-    const tokens = savedJobs();
-    tokens[result.id] = upload.id;
-    localStorage.setItem('print-jobs', JSON.stringify(tokens));
-    message(`Job ${result.id} sent to ${result.printer}.`);
-    await loadJobs();
-  } catch (error) { showError(error); }
-  finally { $('print').disabled = !upload || previewPending; }
+    message(`Print job sent (job ${result.id}).`);
+    printFeedback('Print job sent', `${submittedDocument} sent to ${submittedPrinter}. Job ${result.id}.`, true);
+    // Browser history and queue refresh cannot undo a successful submission.
+    try {
+      const tokens = savedJobs();
+      tokens[result.id] = submittedUpload;
+      localStorage.setItem('print-jobs', JSON.stringify(tokens));
+    } catch {}
+    loadJobs(true).catch(() => {});
+  } catch (error) {
+    showError(error);
+    printFeedback('Could not confirm print job', error.message || String(error), false);
+  } finally {
+    submitting = false;
+    activity();
+  }
 });
+$('view-print-queue').addEventListener('click', () => selectTab('queue', true));
 handle('refresh', loadPrinters);
 handle('reset', loadPrinter);
 handle('refresh-jobs', loadJobs);

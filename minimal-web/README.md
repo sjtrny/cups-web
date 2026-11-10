@@ -1,6 +1,8 @@
 # Minimal print interface
 
-Live: <https://printer.local/>. Direct access: <http://192.168.20.10:18680/>.
+Browser interface for configured CUPS queues. See the parent
+[setup guide](../README.md) for an existing CUPS server or the
+[Brother deployment](../docs/brother.md) for the bundled print server.
 
 Python, plain HTML, vanilla JavaScript and Bootstrap 5.3.8 CSS. No frontend
 framework, JavaScript build, external fonts, CDN requests or custom stylesheet.
@@ -23,10 +25,11 @@ Tabs support arrow keys, Home and End. No additional JavaScript library is used.
 ## Printing
 
 1. Select a configured CUPS printer and upload a PDF, image or UTF-8 text file.
-2. Select the paper loaded in that printer. The Brother queue defaults to
-   **4x6 on 102mm continuous roll**.
-3. Adjust quality and the other driver controls. For the Brother, quality is
-   **Give priority to print speed** or **Give priority to print quality**.
+2. Select the paper loaded in that printer. The initial selection comes from
+   its saved queue defaults. Custom dimensions appear only when the driver
+   supports custom paper and Custom is selected. They start from the queue's
+   default size; selecting a fixed size updates them within the driver limits.
+3. Adjust quality and the other controls exposed by the selected queue.
 4. Choose actual size, fit, fill or a custom percentage (1–1000%). Use
    **Crop white margins before scaling** when the label artwork occupies
    only part of the source PDF page. Use **Horizontal offset (mm)** and
@@ -68,14 +71,23 @@ as PNG; rotated/mirrored, malformed-metadata and other image types keep the
 existing conversion path.
 
 Printer controls are discovered from the queue's PPD and IPP attributes.
-All 12 Brother driver controls are exposed: media size, feed, cut interval,
-cut at end, trimming, mirroring, speed/quality, start-print timing, vertical
-thin-line adjustment, halftoning, brightness and contrast. Numeric driver
+For example, Brother's driver exposes feed, cutting, trimming, mirroring,
+speed/quality, start-print timing, thin-line adjustment, halftoning, brightness
+and contrast. These controls appear only for queues that advertise them. Numeric driver
 choices become number inputs; other choices remain selects. Driver constraints
 are checked on the server. Other printers expose their own installed driver's
 options, including color, duplex, resolution, trays, finishing and custom
 paper sizes where supported. Additional advertised job attributes can be
 entered as `option=value` under **Other print settings**.
+
+Optional [per-printer preferences](../README.md#per-printer-controls) place
+controls in the main or advanced group, hide them, or disable changes. Hidden
+controls remain available to API clients; disabled controls use queue defaults
+and cannot be changed by an API request. Known equivalent IPP/driver option
+names are also blocked. Page ranges support hiding or disabling; their fixed
+position is retained. Preferences do not create capabilities or restrict other
+CUPS clients. Layout defaults still apply when their option controls are hidden
+or disabled, so preview and prepared output use the same layout.
 
 Capabilities are those of configured CUPS queues. Vendor functions not exposed
 through CUPS are outside this MVP. Paper size choices must match the loaded
@@ -118,23 +130,14 @@ Page ranges and hold/PIN options are not saved as printer defaults.
 
 ## Docker
 
-The parent [Compose bundle](../compose.yaml) and
-[rootful override](../compose.rootful.yaml) run in the physical host's rootful
-Docker daemon. Caddy serves `printer.local` on HTTPS using its existing local
-CA; direct access stays on port 18680 and CUPS stays on port 18631.
-`print-ui-data` preserves the app's
-password, layout defaults, uploads and local job records. `cups-runtime`
-shares CUPS's Unix socket read-only with the app, so queue administration
-works without opening CUPS's remote admin interface.
+The standalone [web Compose file](../compose.web.yaml) connects to an existing
+CUPS server. The [Brother bundle](../docs/brother.md) includes its own CUPS
+service and optional HTTPS setup. `print-ui-data` preserves the app's password,
+layout defaults, printer preferences, uploads and local job records. The Brother
+bundle also shares CUPS's Unix socket through `cups-runtime` for administration.
 
-From the project directory on the Docker host:
-
-```bash
-docker compose up --detach --build
-```
-
-The parent [setup guide](../README.md) covers the optional HTTPS override
-and private GHCR images. After web source changes:
+Use the Compose files and environment from your chosen deployment when updating
+the web service. For the default Brother bundle:
 
 ```bash
 docker compose build web
@@ -164,6 +167,8 @@ authentication.
   direct JPEG encoding, ranges and encrypted PDFs.
 - `test_preview.py`: colour modes, queue defaults, cache reuse/invalidation,
   matching preview/download content and unchanged native job options.
+- `test_printers.py`: real PPD/driverless capabilities, media defaults, per-queue
+  preferences, disabled-option aliases, API enforcement and retained layout defaults.
 - `check_api.py`, `test-generic.ppd`: isolated integration checks. Run these
   only against capture queues in containers with `--network none`.
 
@@ -171,11 +176,13 @@ Run the unit checks in the production web image, with no network:
 
 ```bash
 docker compose build web
-docker run --rm --network none \\
-  -e STATE_DIR=/tmp/print-preview-state -e PYTHONDONTWRITEBYTECODE=1 \\
-  --mount "type=bind,source=$PWD/minimal-web/test_documents.py,target=/app/test_documents.py,readonly" \\
-  --mount "type=bind,source=$PWD/minimal-web/test_preview.py,target=/app/test_preview.py,readonly" \\
-  local/minimal-print-web:bookworm python3 -m unittest -v test_documents test_preview
+docker run --rm --network none \
+  -e STATE_DIR=/tmp/print-preview-state -e PYTHONDONTWRITEBYTECODE=1 \
+  --mount "type=bind,source=$PWD/minimal-web/test_documents.py,target=/app/test_documents.py,readonly" \
+  --mount "type=bind,source=$PWD/minimal-web/test_preview.py,target=/app/test_preview.py,readonly" \
+  --mount "type=bind,source=$PWD/minimal-web/test_printers.py,target=/app/test_printers.py,readonly" \
+  --mount "type=bind,source=$PWD/minimal-web/test-generic.ppd,target=/app/test-generic.ppd,readonly" \
+  local/minimal-print-web:bookworm python3 -m unittest -v test_documents test_preview test_printers
 ```
 
 The [GitHub workflows](../.github/workflows/) run these checks on PRs and

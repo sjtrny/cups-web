@@ -290,7 +290,7 @@ def save_defaults(name):
     controls = {o["key"]: o for o in caps["options"]}
     command = ["lpadmin", "-h", cups.getServer(), "-p", name]
     for key, value in options.items():
-        if key in {"page-ranges", "job-hold-until", "job-password", "job-password-encryption"}:
+        if key in caps.get("disabled_options", []) or key in {"page-ranges", "job-hold-until", "job-password", "job-password-encryption"}:
             continue
         keyword = key if key in controls and controls[key]["source"] == "driver" else key + "-default"
         command.extend(["-o", keyword + "=" + value])

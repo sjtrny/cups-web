@@ -1,0 +1,16 @@
+{
+  "Office": {
+    "controls": {
+      "Duplex": "primary",
+      "Resolution": "advanced",
+      "job-priority": "hidden",
+      "finishings": "disabled"
+    }
+  },
+  "Brother_QL1110NWB": {
+    "controls": {
+      "BrPriority": "primary",
+      "BrBrightness": "advanced"
+    }
+  }
+}

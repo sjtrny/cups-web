@@ -34,7 +34,7 @@ LAYOUT_OPTIONS = {
 }
 # Compatibility names are used only when the selected queue exposes them.
 OPTION_ALIASES = {
-    "media": {"PageSize", "PageRegion"},
+    "media": {"PageSize", "PageRegion", "media-col"},
     "sides": {"Duplex"},
     "print-color-mode": {"ColorModel", "ColorMode", "OutputMode", "BRMonoColor"},
     "printer-resolution": {"Resolution", "BRResolution"},

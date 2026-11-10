@@ -125,7 +125,7 @@ class PrinterTest(unittest.TestCase):
             ("ColorModel", {"ColorModel": "Gray", "print-color-mode": "monochrome"}),
             ("sides", {"Duplex": "DuplexNoTumble", "sides": "two-sided-long-edge"}),
             ("Resolution", {"Resolution": "600dpi", "printer-resolution": "300x300dpi"}),
-            ("media", {"PageSize": "Letter", "media": "na_letter_8.5x11in"}),
+            ("media", {"PageSize": "Letter", "media": "na_letter_8.5x11in", "media-col": "{media-size={x-dimension=21000 y-dimension=29700}}"}),
         ]:
             self.preferences({disabled: "disabled"})
             for key, value in attempts.items():

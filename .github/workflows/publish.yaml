@@ -15,7 +15,6 @@ concurrency:
 
 jobs:
   checks:
-    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/ci.yaml
     permissions:
       contents: read
@@ -33,10 +32,14 @@ jobs:
       matrix:
         include:
           - image: cups
+            package: label-printer-cups
             context: .
+            visibility: private
             description: CUPS print server with the Brother QL-1110NWB driver
           - image: web
+            package: cups-web
             context: ./minimal-web
+            visibility: public
             description: Minimal web print interface for CUPS
     steps:
       - name: Check out source
@@ -46,12 +49,11 @@ jobs:
       - name: Set image name
         id: image
         env:
-          REPOSITORY: ${{ github.repository }}
-          COMPONENT: ${{ matrix.image }}
+          OWNER: ${{ github.repository_owner }}
+          PACKAGE: ${{ matrix.package }}
         run: |
-          package="${REPOSITORY##*/}-$COMPONENT"
-          echo "package=${package,,}" >> "$GITHUB_OUTPUT"
-          echo "name=ghcr.io/${REPOSITORY,,}-$COMPONENT" >> "$GITHUB_OUTPUT"
+          echo "package=${PACKAGE,,}" >> "$GITHUB_OUTPUT"
+          echo "name=ghcr.io/${OWNER,,}/${PACKAGE,,}" >> "$GITHUB_OUTPUT"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GitHub Container Registry
@@ -76,19 +78,30 @@ jobs:
             org.opencontainers.image.description=${{ matrix.description }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
-      - name: Verify private package
+      - name: Verify package visibility
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PACKAGE: ${{ steps.image.outputs.package }}
+          VISIBILITY: ${{ matrix.visibility }}
         run: |
           gh api "users/$GITHUB_REPOSITORY_OWNER/packages/container/$PACKAGE" > "$RUNNER_TEMP/package.json"
           python3 - <<'PY'
           import json, os
           from pathlib import Path
           package = json.loads((Path(os.environ["RUNNER_TEMP"]) / "package.json").read_text())
-          assert package["visibility"] == "private", "The image package must remain private"
-          print(f'{package["name"]}: private')
+          expected = os.environ["VISIBILITY"]
+          assert package["visibility"] == expected, f'The image package must be {expected}'
+          print(f'{package["name"]}: {expected}')
           PY
+      - name: Check anonymous image access
+        if: matrix.visibility == 'public'
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DOCKER_CONFIG: ${{ runner.temp }}/anonymous-docker
+        run: |
+          mkdir -p "$DOCKER_CONFIG"
+          printf '{}' > "$DOCKER_CONFIG/config.json"
+          docker manifest inspect "$IMAGE:sha-$GITHUB_SHA" > /dev/null
       - name: Pull published image and check source metadata
         env:
           IMAGE: ${{ steps.image.outputs.name }}
@@ -108,4 +121,4 @@ jobs:
           assert (image["Os"], image["Architecture"]) == ("linux", "amd64"), "The stack requires linux/amd64"
           print(f'Published linux/amd64 image matches {source} at {os.environ["GITHUB_SHA"]}')
           PY
-          printf 'Published private image: %s@%s\n' "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Published image: %s@%s\n' "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"

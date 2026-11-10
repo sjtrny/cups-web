@@ -16,8 +16,8 @@ The complete stack requires a Linux **amd64** Docker host and Docker Compose.
 Brother's driver needs the 32-bit runtime installed in the CUPS image.
 
 ```bash
-git clone https://github.com/sjtrny/label-printer.git
-cd label-printer
+git clone https://github.com/sjtrny/cups-web.git
+cd cups-web
 cp .env.example .env
 ```
 
@@ -53,19 +53,19 @@ from Brother during the image build and verified against a pinned SHA-256.
 
 ## Automatic Docker images
 
-[Publish images](https://github.com/sjtrny/label-printer/actions/workflows/publish.yaml)
+[Publish images](https://github.com/sjtrny/cups-web/actions/workflows/publish.yaml)
 runs on **every push to `main`**, including PR merges. It first builds both
 images and runs the checks from [CI](../.github/workflows/ci.yaml). Images are
 published only when those checks pass. The workflow can also be run manually
-for `main`.
+for a selected branch.
 
 | Image | Purpose |
 | --- | --- |
 | `ghcr.io/sjtrny/label-printer-cups` | CUPS and Brother's native driver |
-| `ghcr.io/sjtrny/label-printer-web` | Python browser interface |
+| `ghcr.io/sjtrny/cups-web` | Python browser interface |
 
 Each image has a `latest` tag and a `sha-FULL_COMMIT_SHA` tag. Both are
-`linux/amd64`. Packages are private and linked to this private repository.
+`linux/amd64`. The web image is public. The Brother CUPS image is private.
 The publishing workflow checks their visibility. It uses GitHub's automatic
 `GITHUB_TOKEN`; no Docker Hub account or repository secret is needed.
 
@@ -75,8 +75,9 @@ preview tests without a network or physical printer.
 
 ## Run the published images
 
-Authenticate the **Docker host** to GHCR with a classic GitHub personal access
-token that has `read:packages` and access to this repository. Use
+The Brother CUPS image needs authentication. Authenticate the **Docker host** to
+GHCR with a classic GitHub personal access token that has `read:packages` and
+package access. Use
 `docker login ghcr.io --username sjtrny` and enter the token at its password
 prompt. Keep the token out of `.env` and Git.
 

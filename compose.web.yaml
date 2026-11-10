@@ -2,7 +2,7 @@
 services:
   web:
     build: ./minimal-web
-    image: ghcr.io/sjtrny/label-printer-web:${IMAGE_TAG:-latest}
+    image: ghcr.io/sjtrny/cups-web:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       CUPS_SERVER: ${CUPS_SERVER:?Set CUPS_SERVER to the existing CUPS host:port}

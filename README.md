@@ -11,26 +11,29 @@ trays and finishing.
 Configure your printers in CUPS first. Use this method on a Linux Docker host
 with a CUPS socket at `/run/cups/cups.sock`.
 
-Pushes to `main` [publish the image](.github/workflows/publish.yaml) to GHCR after checks pass.
-The image supports `linux/amd64`. Tags are `latest` and `sha-FULL_COMMIT_SHA`.
+Save this as `compose.yaml`:
 
-The image is private. Use a GitHub account with package access. Enter a
-[personal access token (classic)](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic)
-with `read:packages` at the password prompt:
+```yaml
+services:
+  web:
+    image: ghcr.io/sjtrny/cups-web:latest
+    restart: unless-stopped
+    environment:
+      CUPS_SERVER: /run/cups/cups.sock
+    ports:
+      - "18680:8080"
+    volumes:
+      - /run/cups:/run/cups:ro
+      - cups-web-data:/data
 
-```sh
-docker login ghcr.io -u YOUR_GITHUB_USER
+volumes:
+  cups-web-data:
 ```
 
 Start the web interface:
 
 ```sh
-docker run -d --name cups-web --restart unless-stopped \
-  -p 18680:8080 \
-  -e CUPS_SERVER=/run/cups/cups.sock \
-  --mount type=bind,src=/run/cups,dst=/run/cups,readonly \
-  --mount type=volume,src=cups-web-data,dst=/data \
-  ghcr.io/sjtrny/label-printer-web:latest
+docker compose up -d
 ```
 
 CUPS socket permissions must allow access from the container.
@@ -41,21 +44,35 @@ Printing needs no login. To change printer defaults or manage queues, get the
 web administrator password:
 
 ```sh
-docker exec cups-web cat /data/admin-password
+docker compose exec web cat /data/admin-password
 ```
 
 # Connect to a networked CUPS server
 
 Configure your printers on the CUPS server. Allow connections from the Docker
-host. Log in to GHCR as above, then use this command instead. Replace
-`192.168.1.20:631` with the CUPS server's address and port.
+host. Save this as `compose.yaml` instead. Replace `192.168.1.20:631` with the
+CUPS server's address and port.
+
+```yaml
+services:
+  web:
+    image: ghcr.io/sjtrny/cups-web:latest
+    restart: unless-stopped
+    environment:
+      CUPS_SERVER: 192.168.1.20:631
+    ports:
+      - "18680:8080"
+    volumes:
+      - cups-web-data:/data
+
+volumes:
+  cups-web-data:
+```
+
+Start the web interface:
 
 ```sh
-docker run -d --name cups-web --restart unless-stopped \
-  -p 18680:8080 \
-  -e CUPS_SERVER=192.168.1.20:631 \
-  --mount type=volume,src=cups-web-data,dst=/data \
-  ghcr.io/sjtrny/label-printer-web:latest
+docker compose up -d
 ```
 
 Open `http://HOST:18680`. Use the password command above for web administration.
@@ -92,7 +109,7 @@ Get option keys from `/api/printers/NAME`.
 Apply the file, then select **Refresh printers**:
 
 ```sh
-docker cp printers.json cups-web:/data/printers.json
+docker compose cp printers.json web:/data/printers.json
 ```
 
 Unlisted controls keep their normal position. The file cannot add unsupported

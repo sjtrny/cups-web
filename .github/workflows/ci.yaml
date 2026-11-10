@@ -31,6 +31,7 @@ jobs:
           sh -n entrypoint.sh install-driver.sh
           node --check minimal-web/static/app.js
           docker compose config --quiet
+          CUPS_SERVER=cups.example:631 docker compose -f compose.web.yaml config --quiet
           docker compose -f compose.yaml -f compose.ghcr.yaml -f compose.rootful.yaml config --quiet
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -50,7 +51,9 @@ jobs:
             -e STATE_DIR=/tmp/print-preview-state -e PYTHONDONTWRITEBYTECODE=1 \
             --mount "type=bind,source=$PWD/minimal-web/test_documents.py,target=/app/test_documents.py,readonly" \
             --mount "type=bind,source=$PWD/minimal-web/test_preview.py,target=/app/test_preview.py,readonly" \
-            local/label-printer-web:ci python3 -m unittest -v test_documents test_preview
+            --mount "type=bind,source=$PWD/minimal-web/test_printers.py,target=/app/test_printers.py,readonly" \
+            --mount "type=bind,source=$PWD/minimal-web/test-generic.ppd,target=/app/test-generic.ppd,readonly" \
+            local/label-printer-web:ci python3 -m unittest -v test_documents test_preview test_printers
       - name: Check CUPS startup and driver
         if: matrix.image == 'cups'
         run: |

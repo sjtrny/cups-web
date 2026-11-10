@@ -1,4 +1,5 @@
 """Read and validate the controls published by CUPS and its printer drivers."""
+import json
 import os
 import re
 from contextlib import contextmanager
@@ -31,6 +32,70 @@ LAYOUT_OPTIONS = {
     "outputorder": (["normal", "reverse"], "normal"),
     "page-border": (["none", "single", "double"], "none"),
 }
+# Compatibility names are used only when the selected queue exposes them.
+OPTION_ALIASES = {
+    "media": {"PageSize", "PageRegion"},
+    "sides": {"Duplex"},
+    "print-color-mode": {"ColorModel", "ColorMode", "OutputMode", "BRMonoColor"},
+    "printer-resolution": {"Resolution", "BRResolution"},
+    "print-quality": {"BrPriority", "cupsPrintQuality"},
+    "media-source": {"InputSlot"},
+    "media-type": {"MediaType"},
+}
+PRIMARY_OPTIONS = {"PageSize", "media", "copies", "print-quality"} | OPTION_ALIASES["print-quality"]
+
+
+def control_preferences(name):
+    """Read optional per-queue presentation/restrictions, shared by all workers."""
+    configured = os.environ.get("PRINTER_CONFIG")
+    path = Path(configured or str(Path(os.environ.get("STATE_DIR", "/data")) / "printers.json"))
+    try:
+        profiles = json.loads(path.read_text())
+    except FileNotFoundError:
+        if not configured:
+            return {}
+        raise ValueError("The configured printer preferences file is missing.") from None
+    except (OSError, ValueError):
+        raise ValueError("The printer preferences file must contain valid JSON.") from None
+    if not isinstance(profiles, dict):
+        raise ValueError("Printer preferences must be an object keyed by CUPS queue name.")
+    for queue, profile in profiles.items():
+        if not isinstance(profile, dict) or set(profile) - {"controls"}:
+            raise ValueError(f"Printer preferences for {queue} must contain only a controls object.")
+        controls = profile.get("controls", {})
+        if not isinstance(controls, dict) or any(
+            not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,79}", key)
+            or not isinstance(value, str) or value not in {"primary", "advanced", "hidden", "disabled"}
+            for key, value in controls.items()
+        ):
+            raise ValueError(f"Invalid control preferences for {queue}.")
+    return profiles.get(name, {}).get("controls", {})
+
+
+def apply_preferences(caps):
+    preferences = control_preferences(caps["name"])
+    disabled = {key for key, value in preferences.items() if value == "disabled"}
+    for standard, aliases in OPTION_ALIASES.items():
+        if disabled & (aliases | {standard}):
+            disabled.update(aliases | {standard})
+    caps["disabled_options"] = sorted(disabled)
+    caps["hidden_options"] = [key for key, value in preferences.items() if value == "hidden"]
+    for option in caps["options"]:
+        key = option["key"]
+        placement = "primary" if key in PRIMARY_OPTIONS else "driver" if option["source"] == "driver" else "advanced"
+        preference = preferences.get(key)
+        option["placement"] = preference if preference in {"primary", "advanced", "hidden"} else placement
+        option["disabled"] = key in disabled
+    if caps["custom"]:
+        try:
+            size = paper_size(caps, {})
+        except ValueError:
+            size = next(iter(caps["sizes"].values()), {})
+        caps["custom_default"] = {
+            axis: max(limits["min"], min(limits["max"], size.get(axis, limits["min"] * 72 / 25.4) * 25.4 / 72))
+            for axis, limits in caps["custom"].items()
+        }
+    return caps
 
 
 def connection():
@@ -106,6 +171,10 @@ def capabilities(name, conn=None):
                     pass
             options.append(entry)
             if option.keyword == "PageSize":
+                # CUPS can append the saved custom size as a second choice.
+                # Use the Custom fields for that size instead of a fixed entry.
+                if custom and any(c["value"] == "Custom" for c in entry["choices"]):
+                    entry["choices"] = [c for c in entry["choices"] if not c["value"].startswith("Custom.")]
                 for choice in option.choices:
                     size = dimensions.get(choice["choice"])
                     if size:
@@ -165,10 +234,10 @@ def capabilities(name, conn=None):
         if key and "x-dimension" in media and "y-dimension" in media:
             sizes[key] = {"width": media["x-dimension"] * 72 / 2540,
                           "height": media["y-dimension"] * 72 / 2540, "imageable": None}
-    return {"name": name, "info": attrs.get("printer-info", name), "model": attrs.get("printer-make-and-model", ""),
+    return apply_preferences({"name": name, "info": attrs.get("printer-info", name), "model": attrs.get("printer-make-and-model", ""),
             "location": attrs.get("printer-location", ""), "state": attrs.get("printer-state", 3),
             "reasons": attrs.get("printer-state-reasons", []), "accepting": attrs.get("printer-is-accepting-jobs", True),
-            "options": options, "sizes": sizes, "custom": custom if len(custom) == 2 else None, "attributes": attrs}
+            "options": options, "sizes": sizes, "custom": custom if len(custom) == 2 else None, "attributes": attrs})
 
 
 def validated_options(name, supplied, conn=None):
@@ -181,6 +250,8 @@ def validated_options(name, supplied, conn=None):
     forbidden = {"document-format", "document-name", "requesting-user-name", "job-name", "job-originating-user-name", "printer-uri", "device-uri", "PageRegion"}
     clean = {}
     for key, value in supplied.items():
+        if key in caps["disabled_options"]:
+            raise ValueError(f"The administrator has disabled changes to {key} for this printer.")
         if key in forbidden or key not in allowed or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,79}", key):
             raise ValueError(f"Unsupported option: {key}")
         if value is None or value == "":
@@ -207,6 +278,11 @@ def validated_options(name, supplied, conn=None):
             if any(v not in {c["value"] for c in item["choices"]} for v in values):
                 raise ValueError(f"Invalid choice for {item['label']}.")
         clean[key] = value
+    # These defaults must reach the PDF renderer even when a control is hidden
+    # or disabled. CUPS scaling/N-up are disabled for the prepared document.
+    for key in LAYOUT_OPTIONS.keys() | {"orientation-requested"}:
+        if key in controls and key not in clean:
+            clean[key] = controls[key]["default"]
     with driver(conn, name) as (ppd, _):
         if ppd:
             ppd.markDefaults()
@@ -247,7 +323,7 @@ def preview_color_mode(caps, options):
 def custom_dimensions(value):
     match = re.fullmatch(r"Custom\.([0-9.]+)x([0-9.]+)(mm|in|pt)?", value)
     if not match:
-        raise ValueError("Custom paper size must look like Custom.102x152mm.")
+        raise ValueError("Use Custom.<width>x<height> with numeric dimensions and optional mm, in or pt units.")
     factor = {"mm": 72 / 25.4, "in": 72, "pt": 1, None: 1}[match[3]]
     return float(match[1]) * factor, float(match[2]) * factor
 

@@ -3,7 +3,6 @@ const $ = id => document.getElementById(id);
 let printer = null, upload = null, previewPage = 1, previewPages = 1, timer, previewRequest, revision = 0, uploadRevision = 0;
 let uploadRequest, printerRevision = 0, activeRequests = 0, previewPending = false;
 let previewReady = false, submitting = false;
-const primary = new Set(['PageSize', 'media', 'copies', 'BrPriority', 'print-quality']);
 const jobStates = {3: 'Queued', 4: 'Held', 5: 'Printing', 6: 'Stopped', 7: 'Cancelled', 8: 'Aborted', 9: 'Completed'};
 
 function message(text, error = false) {
@@ -122,6 +121,8 @@ function optionControl(option) {
       field.append(element);
     }
   }
+  field.disabled = Boolean(option.disabled);
+  if (option.disabled) field.title = 'Uses the printer default. Changes are disabled by the administrator.';
   wrapper.append(label, field);
   return wrapper;
 }
@@ -163,9 +164,11 @@ async function loadPrinter() {
   printer = result;
   for (const id of ['main-controls', 'driver-controls', 'other-controls']) $(id).replaceChildren();
   for (const option of printer.options) {
-    const group = primary.has(option.key) ? 'main-controls' : option.source === 'driver' ? 'driver-controls' : 'other-controls';
+    if (option.placement === 'hidden') continue;
+    const group = option.placement === 'primary' ? 'main-controls' : option.placement === 'driver' ? 'driver-controls' : 'other-controls';
     $(group).append(optionControl(option));
   }
+  $('driver-controls').closest('details').hidden = !$('driver-controls').children.length;
   const layout = printer.layout;
   $('scale').value = layout.scale;
   $('percent').value = layout.percent;
@@ -174,6 +177,8 @@ async function loadPrinter() {
   $('rotation').value = layout.rotation;
   $('crop').checked = layout.crop;
   $('pages').value = '';
+  $('pages').disabled = printer.disabled_options.includes('page-ranges');
+  $('pages').parentElement.hidden = printer.hidden_options.includes('page-ranges');
   $('extra').value = '';
   $('capabilities').textContent = JSON.stringify(printer.attributes, null, 2);
   $('printer-info').disabled = false;
@@ -182,14 +187,7 @@ async function loadPrinter() {
       const field = $('paper-' + axis), limits = printer.custom[axis];
       field.min = limits.min;
       field.max = limits.max;
-      field.value = Math.max(limits.min, Math.min(limits.max, axis === 'width' ? 102 : 152));
-    }
-    const value = printer.options.find(o => o.key === 'PageSize')?.default;
-    const match = /^Custom\.([\d.]+)x([\d.]+)(mm|in|pt)?$/.exec(value || '');
-    if (match) {
-      const factor = match[3] === 'mm' ? 1 : match[3] === 'in' ? 25.4 : 25.4 / 72;
-      $('paper-width').value = Number(match[1]) * factor;
-      $('paper-height').value = Number(match[2]) * factor;
+      field.value = printer.custom_default[axis];
     }
   }
   printerState();
@@ -210,9 +208,10 @@ function requestDocument() {
   if (!$('print-form').reportValidity()) throw new Error('Check the highlighted print setting.');
   const options = {};
   for (const field of document.querySelectorAll('[data-option]')) {
+    if (field.disabled) continue;
     options[field.dataset.option] = field.multiple ? [...field.selectedOptions].map(o => o.value).join(',') : field.value;
   }
-  if ($('pages').value.trim()) options['page-ranges'] = $('pages').value.trim();
+  if (!$('pages').disabled && $('pages').value.trim()) options['page-ranges'] = $('pages').value.trim();
   if (options.PageSize === 'Custom' && printer.custom) options.PageSize = `Custom.${$('paper-width').value}x${$('paper-height').value}mm`;
   for (const line of $('extra').value.split('\n')) {
     if (!line.trim()) continue;
@@ -229,7 +228,8 @@ function requestDocument() {
 function schedulePreview() {
   $('percent-field').hidden = $('scale').value !== 'custom';
   $('percent').disabled = $('scale').value !== 'custom';
-  const custom = Boolean(printer?.custom && $('option-PageSize')?.value === 'Custom');
+  const paper = $('option-PageSize');
+  const custom = Boolean(printer?.custom && paper && !paper.disabled && paper.value === 'Custom');
   $('custom-paper').hidden = !custom;
   $('paper-width').disabled = $('paper-height').disabled = !custom;
   previewReady = false;
@@ -389,6 +389,15 @@ $('file').addEventListener('change', async () => {
   }
 });
 $('print-form').addEventListener('input', event => {
+  if (event.target.dataset.option === 'PageSize' && printer?.custom) {
+    const size = printer.sizes[event.target.value];
+    if (size) {
+      for (const axis of ['width', 'height']) {
+        const limits = printer.custom[axis];
+        $('paper-' + axis).value = Math.max(limits.min, Math.min(limits.max, size[axis] * 25.4 / 72));
+      }
+    }
+  }
   if (event.target !== $('file')) schedulePreview();
 });
 $('print-form').addEventListener('submit', async event => {

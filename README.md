@@ -1,135 +1,145 @@
-# Brother label print server
+# CUPS web print interface
 
-A Docker print server for an Ethernet Brother QL-1110NWB, with a minimal
-Python browser interface. CUPS runs Brother's Linux driver on the server, so
-clients can upload documents from any OS without installing that driver.
+A minimal web interface for CUPS. Upload documents, preview and adjust their
+layout, select printer settings, and manage print jobs from a browser.
 
-The browser interface uses basic HTML, vanilla JavaScript and vendored
-Bootstrap CSS. It supports PDF and raster uploads, printer controls, quality,
-colour previews, scaling, rotation, cropping and content offsets. CUPS also
-shares a standard IPP queue. See [the browser guide](minimal-web/README.md).
+The application uses Python, basic HTML, vanilla JavaScript and vendored
+Bootstrap CSS. CUPS supplies printer drivers and queues. Controls come from
+each queue's PPD and IPP capabilities, including paper sizes, colour, duplex,
+quality, trays and finishing where available. Device-specific controls appear
+only when that queue exposes them.
 
-## Run from source
+- Upload PDFs, raster images including HEIC/AVIF, and UTF-8 text.
+- Preview scaling, rotation, cropping, content offsets and pages per sheet.
+- Download the prepared PDF used for printing.
+- Manage jobs and save printer and layout defaults per queue.
+- Optionally choose prominent, advanced, hidden or disabled controls per printer.
 
-The complete stack requires a Linux **amd64** Docker host and Docker Compose.
-Brother's driver needs the 32-bit runtime installed in the CUPS image.
+The repository also includes a Docker print server for the Brother QL-1110NWB.
+That deployment installs Brother's driver and supplies label-roll defaults.
+See the [Brother setup guide](docs/brother.md). The web application can also
+connect to an existing CUPS server with other configured printers. Hardware
+support depends on the queue and driver; vendor functions absent from CUPS
+are not available through the application.
+
+## Connect to an existing CUPS server
+
+Install and configure the printers in CUPS first. Then clone this repository
+and build the standalone web service:
 
 ```bash
 git clone https://github.com/sjtrny/label-printer.git
 cd label-printer
-cp .env.example .env
+CUPS_SERVER=192.168.1.20:631 docker compose -f compose.web.yaml up --detach --build
 ```
 
-Edit `.env` for your host's LAN address and the printer's Ethernet address.
-Reserve the printer's IP address in your router. Then build and start:
+Replace the example CUPS address with your server's address. Open
+`http://localhost:18680/` on the Docker host. For LAN access, also set `WEB_BIND`
+to the host's LAN address. Set `WEB_PORT` to change the port. Use the same
+environment values for subsequent Compose commands, or save them in `.env`.
+The Docker container needs network access to CUPS, and CUPS must allow printing
+from it. The service lists queues already configured on that CUPS server.
+
+Printing requires no web login. The generated web administrator password
+protects saving defaults, queue administration and other browsers' jobs:
 
 ```bash
-docker compose up --detach --build
-docker compose ps
+CUPS_SERVER=192.168.1.20:631 docker compose -f compose.web.yaml exec web cat /data/admin-password
 ```
 
-Open `http://HOST_IP:18680/`. The IPP queue is
-`ipp://HOST_IP:18631/printers/Brother_QL1110NWB`.
-The Docker host needs network access to the printer on TCP port 9100.
+The web password does not authenticate to a remote CUPS server. Administrative
+operations need CUPS permission; the bundled Brother deployment uses a shared
+local Unix socket. For CUPS running on the Docker host, an explicit override
+can mount its socket directory:
 
-The default **4x6** preset is for a 152 mm label cut from a **102 mm continuous
-roll**. Choose media that matches the roll actually loaded. Continuous lengths
-require a preset in Brother's driver. `LABEL_MEDIA` sets the default for a new
-queue; later defaults persist in the CUPS volume and can be changed in the
-browser interface.
+```yaml
+# compose.socket.yaml
+services:
+  web:
+    volumes:
+      - /run/cups:/run/cups:ro
+```
 
-Printing on the LAN requires no login. Queue administration and saving
-defaults require the app's generated administrator password:
+Run with `CUPS_SERVER=/run/cups/cups.sock` and both
+`-f compose.web.yaml -f compose.socket.yaml`. CUPS socket permissions and local
+policy must allow access. No remote CUPS credential support is added by this
+mount.
+
+The `print-ui-data` volume preserves the administrator password, uploads,
+job records and layout defaults. Uploads and app records expire after seven
+days. The [browser guide](minimal-web/README.md) describes formats, layout,
+queue controls and the preview's limits.
+
+## Per-printer controls
+
+Normal operation needs no printer profiles. Settings and available options
+come from CUPS. Custom-paper dimensions start from the queue's default paper
+and follow the selected fixed size when switching to custom paper.
+
+To customise a queue, create `/data/printers.json` in the web service's
+persistent volume, or set `PRINTER_CONFIG` to a mounted JSON file. Queue names
+and option keys must match CUPS; `GET /api/printers` lists names, and
+`GET /api/printers/NAME` lists option keys and defaults.
+
+```json
+{
+  "Office": {
+    "controls": {
+      "Duplex": "primary",
+      "Resolution": "advanced",
+      "job-priority": "hidden",
+      "finishings": "disabled"
+    }
+  }
+}
+```
+
+| Setting | Behaviour |
+| --- | --- |
+| `primary` | Put an advertised control beside paper size and copies. |
+| `advanced` | Put it under Other print settings. |
+| `hidden` | Omit the form control. API clients and Other print settings can still set it. |
+| `disabled` | Disable the form control and reject changes through this app's API, including recognised driver/IPP aliases. Use the queue default. |
+
+Unlisted options keep their normal placement. Profiles cannot add unsupported
+capabilities. A disabled option does not turn off the hardware feature: it
+prevents this application from changing its queue default. It does not affect
+other CUPS clients. Saved CUPS defaults remain the source of default values.
+Scaling, cropping, rotation and content offsets remain available for all
+printers because the app applies them to the document.
+
+Start from [the example](minimal-web/printers.example.json). With the same
+Compose file and environment used to start your service, copy your edited file:
 
 ```bash
-docker compose exec web cat /data/admin-password
+CUPS_SERVER=192.168.1.20:631 docker compose -f compose.web.yaml cp printers.json web:/data/printers.json
 ```
 
-Named volumes preserve printer settings, the admin password, uploads, layout
-defaults and job records. Uploads and app records expire after seven days.
-CUPS does not retain completed job documents. Driver files are downloaded
-from Brother during the image build and verified against a pinned SHA-256.
+Preferences are read on each capability or submission request; refresh the
+printer selection to update an open form. Removing an entry restores automatic
+behaviour. An absent default file means no overrides. Invalid configuration,
+or a missing explicitly configured `PRINTER_CONFIG` file, reports an error
+instead of ignoring restrictions. Custom filenames can be mounted read-only
+and supplied through a Compose environment override.
 
-## Automatic Docker images
+## Docker images
 
-[Publish images](https://github.com/sjtrny/label-printer/actions/workflows/publish.yaml)
-runs on **every push to `main`**, including PR merges. It first builds both
-images and runs the checks from [CI](.github/workflows/ci.yaml). Images are
-published only when those checks pass. The workflow can also be run manually
-for `main`.
+Every push to `main`, including a PR merge, runs
+[CI](.github/workflows/ci.yaml) and then publishes two private images:
 
 | Image | Purpose |
 | --- | --- |
-| `ghcr.io/sjtrny/label-printer-cups` | CUPS and Brother's native driver |
-| `ghcr.io/sjtrny/label-printer-web` | Python browser interface |
+| `ghcr.io/sjtrny/label-printer-web` | General CUPS web interface |
+| `ghcr.io/sjtrny/label-printer-cups` | CUPS with the Brother QL-1110NWB driver |
 
-Each image has a `latest` tag and a `sha-FULL_COMMIT_SHA` tag. Both are
-`linux/amd64`. Packages are private and linked to this private repository.
-The publishing workflow checks their visibility. It uses GitHub's automatic
-`GITHUB_TOKEN`; no Docker Hub account or repository secret is needed.
+Images are currently published for `linux/amd64` with `latest` and
+`sha-FULL_COMMIT_SHA` tags. The Brother image requires its 32-bit driver runtime;
+the web application does not include that driver. Package names are retained
+for existing deployments. Publishing an image does not update a running service.
 
-PRs run CI without publishing. CI checks JavaScript and shell syntax, starts
-CUPS without networking, validates the PPD, and runs the Python document and
-preview tests without a network or physical printer.
-
-## Run the published images
-
-Authenticate the **Docker host** to GHCR with a classic GitHub personal access
-token that has `read:packages` and access to this repository. Use
-`docker login ghcr.io --username sjtrny` and enter the token at its password
-prompt. Keep the token out of `.env` and Git.
-
-Use the image override to pull and run the published containers:
-
-```bash
-docker compose -f compose.yaml -f compose.ghcr.yaml pull
-docker compose -f compose.yaml -f compose.ghcr.yaml up --detach --no-build
-```
-
-Set `IMAGE_TAG=sha-FULL_COMMIT_SHA` in `.env` to use a specific revision.
-The default is `latest`. The override uses the same services and volumes
-as the source build. Publishing an image does not update a running deployment.
-
-## HTTPS at printer.local
-
-With an existing Caddy Docker proxy on the external `caddy_proxy` network,
-add the rootful override. On the host's rootful Docker daemon:
-
-```bash
-docker --context default compose -f compose.yaml -f compose.rootful.yaml up --detach --build
-```
-
-Or use the published images:
-
-```bash
-docker --context default compose -f compose.yaml -f compose.ghcr.yaml -f compose.rootful.yaml pull
-docker --context default compose -f compose.yaml -f compose.ghcr.yaml -f compose.rootful.yaml up --detach --no-build
-```
-
-This exposes `https://printer.local/` using Caddy's internal CA. Clients need
-LAN name resolution for `printer.local` and trust in that CA. Direct web and
-IPP ports remain available. USB passthrough, privileged mode and host
-networking are not required.
-
-## IPP clients
-
-Windows can use its built-in IPP Class Driver:
-
-```powershell
-Add-Printer -Name "Brother Labels" -IppURL "ipp://HOST_IP:18631/printers/Brother_QL1110NWB"
-```
-
-On macOS, add an IP printer with Internet Printing Protocol, address
-`HOST_IP:18631` and queue `printers/Brother_QL1110NWB`. On Linux with CUPS:
-
-```bash
-sudo lpadmin -p BrotherLabels -E -v ipp://HOST_IP:18631/printers/Brother_QL1110NWB -m everywhere
-```
-
-Automatic Bonjour discovery is disabled. Windows' generic system print dialog
-may omit percentage scaling and cropping; the browser interface provides
-these controls independently of the client driver.
-
-References: [CUPS printer sharing](https://openprinting.github.io/cups/doc/sharing.html),
-[Brother's Linux driver](https://support.brother.com/g/b/downloadend.aspx?c=us&dlid=dlfp100575_000&flang=178&lang=en&os=130&prod=lpql1110nwbeus&type3=10735),
-[GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+Authenticate the Docker host to GHCR with a token that has `read:packages` and
+access to this private repository. Keep the token out of `.env` and Git. For
+the standalone service, run `pull` and then `up --detach --no-build` using
+`compose.web.yaml` and your saved environment. `IMAGE_TAG` selects a specific
+published revision. The [Brother guide](docs/brother.md) covers the complete
+stack, existing IPP clients and optional HTTPS at `printer.local`.

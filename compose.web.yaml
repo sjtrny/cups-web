@@ -1,0 +1,23 @@
+# Standalone web interface for an existing CUPS server.
+services:
+  web:
+    build: ./minimal-web
+    image: ghcr.io/sjtrny/label-printer-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      CUPS_SERVER: ${CUPS_SERVER:?Set CUPS_SERVER to the existing CUPS host:port}
+      STATE_DIR: /data
+      RETENTION_DAYS: "7"
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-18680}:8080"
+    volumes:
+      - print-ui-data:/data
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  print-ui-data:

@@ -34,8 +34,10 @@ jobs:
         include:
           - image: cups
             context: .
+            description: CUPS print server with the Brother QL-1110NWB driver
           - image: web
             context: ./minimal-web
+            description: Minimal web print interface for CUPS
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,7 +73,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.description=Ethernet Brother label print server (${{ matrix.image }})
+            org.opencontainers.image.description=${{ matrix.description }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
       - name: Verify private package
